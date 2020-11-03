@@ -1,0 +1,39 @@
+<?xml version = '1.0' encoding = 'UTF-8'?>
+<?xml-stylesheet type='text/xsl' href='/qgis/plugins.xsl' ?>
+<plugins>
+  
+    <pyqgis_plugin name='Parsel Bul' version='0.2'>
+    <description>This plugin allows parcel information which clicked any point on canvas by user. Data comes from TKGM service.
+	Data must be geographic coordinate system in order to load correctly in QGIS. Therefore please be sure to use WGS84 datum geographic 
+	coordinate system which has EPSG:4326 code.
+	</description>
+    <version>0.2</version>
+    <qgis_minimum_version>2.0</qgis_minimum_version>
+    <homepage>www.derinpinar.net/blog</homepage>
+    <file_name>parselBul.zip</file_name>
+    <author_name>Mustafa Andac Derinpinar</author_name>
+    <download_url>http://derinpinar.net/qgis/plugin/parselBul.zip</download_url>
+    <uploaded_by>Mustafa Andac Derinpinar</uploaded_by>
+    <create_date>2017-02-13</create_date>
+    <update_date>2017-03-07</update_date>
+  </pyqgis_plugin>
+  
+  <pyqgis_plugin name='Random Forest Classification' version='0.1'>
+    <description>Random forests or random decision forestsare an ensemble learning method for classification, 
+	regression and other tasks, that operate by constructing a multitude of decision trees at training time and 
+	outputting the class that is the mode of the classes (classification) or mean prediction (regression) of the individual trees.
+	Random decision forests correct for decision trees' habit of overfitting to their training set. This Plugin allows to use random forest algorithm
+	to classify images and generate shape file of classified areas special big and meaningful parts. Specially you can use this plug-in to 
+	discriminate water and ground areas</description>
+    <version>0.1</version>
+    <qgis_minimum_version>2.0</qgis_minimum_version>
+    <homepage>www.derinpinar.net/blog</homepage>
+    <file_name>randomForest.zip</file_name>
+    <author_name>Mustafa Andac Derinpinar</author_name>
+    <download_url>http://derinpinar.net/qgis/plugin/randomForest.zip</download_url>
+    <uploaded_by>Mustafa Andac Derinpinar</uploaded_by>
+    <create_date>2017-02-22</create_date>
+    <update_date>2017-02-22</update_date>
+  </pyqgis_plugin>
+  
+</plugins>
