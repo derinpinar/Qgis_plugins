@@ -23,13 +23,15 @@
 """
 from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication
 from qgis.PyQt.QtGui import QIcon
-from qgis.PyQt.QtWidgets import QAction
+from qgis.PyQt.QtWidgets import QAction,QFileDialog
+from qgis.core import QgsProject,Qgis,QgsSpatialIndex,QgsVectorLayer,QgsFeatureRequest,QgsWkbTypes,QgsVectorFileWriter
 
 # Initialize Qt resources from file resources.py
 from .resources import *
 # Import the code for the dialog
 from .polygonfixer_dialog import PolygonFixerDialog
 import os.path
+import time
 
 
 class PolygonFixer:
@@ -180,6 +182,103 @@ class PolygonFixer:
             self.iface.removeToolBarIcon(action)
 
 
+    def select_output_file(self):
+        filename, _filter = QFileDialog.getSaveFileName(
+            self.dlg, "Select your output file ", "", '*.shp')
+        self.dlg.lineEdit.setText(filename)
+
+    def MemoryPolygonLayer(self,layer):
+        # Create Memory Layer
+        memory_layer = QgsVectorLayer("Polygon?crs=epsg:4326", "Fixed Polygon", "memory")
+        memory_layer_data = memory_layer.dataProvider()
+        attr = layer.dataProvider().fields().toList()
+        memory_layer_data.addAttributes(attr)
+        memory_layer.updateFields()
+
+        feats = [feat for feat in layer.getFeatures()]
+        memory_layer_data.addFeatures(feats)
+        return memory_layer
+
+    def SpatialIndex(self,mem_layer):
+        # Create Spatial Index
+        index = QgsSpatialIndex()
+        for f in mem_layer.getFeatures():
+            index.insertFeature(f)
+        return index
+
+    def GeometryControl(self,geom):
+        # Check Geometry Type and Return Biggest Polygon
+        areas = []
+        geomSingleType = QgsWkbTypes.isSingleType(geom.wkbType())
+
+        if geomSingleType:
+            return geom
+
+        elif geom.isEmpty():
+            print("Geometry Error !")
+            return geom
+        else:
+            for i in geom.asGeometryCollection():
+                if i.type() == QgsWkbTypes.PointGeometry:
+                    print("Point geometry removed")
+                elif i.type() == QgsWkbTypes.LineGeometry:
+                    print("Line geometry removed")
+                elif i.type() == QgsWkbTypes.PolygonGeometry:
+                    areas.append([i.area(), i])
+                elif i.type() == QgsWkbTypes.UnknownGeometry:
+                    print("Unknown geometry removed")
+            print("Biggest area selected")
+            return (max(areas)[1])
+
+    def feature_difference(self,layer):
+        # Get the intersects polygons and difference from neihghboor
+        start = time.time()
+
+        mem_layer = self.MemoryPolygonLayer(layer)
+        index = self.SpatialIndex(mem_layer)
+
+        for f1 in mem_layer.getFeatures():
+            geom1 = f1.geometry()
+            intersecting_ids = index.intersects(geom1.boundingBox())
+
+            request = QgsFeatureRequest()
+            request.setFilterFids(intersecting_ids)
+            features = mem_layer.getFeatures(request)
+
+            for f2 in features:
+                if f1['id'] != f2['id'] and f2['id'] is not None:
+                    geom2 = f2.geometry()
+                    new_geom = geom1.difference(geom2)
+
+                    if new_geom.area() != geom1.area():
+                        if new_geom.type() == QgsWkbTypes.UnknownGeometry:
+                            print("Unknown Geometry Type Detected !", "in id: ", f1['id'])
+                            new_geom = self.GeometryControl(new_geom)
+                            new_geom = new_geom if new_geom.isEmpty() == False else geom1
+
+                        mem_layer.dataProvider().changeGeometryValues({f1.id(): new_geom})
+                        geom1 = new_geom
+
+        mem_layer.updateFields()
+        end = time.time()
+        print(round(end - start, 6), " time elapsed for difference")
+
+        return mem_layer
+
+    def featurebuffer(self,layer):
+        mem_layer = self.MemoryPolygonLayer(layer)
+
+        for f1 in mem_layer.getFeatures():
+            geom1 = f1.geometry()
+            buffer = geom1.buffer(0.00001, 5)
+            mem_layer.dataProvider().changeGeometryValues({f1.id(): buffer})
+
+        mem_layer.updateFields()
+        end = time.time()
+
+        return mem_layer
+
+
     def run(self):
         """Run method that performs all the real work"""
 
@@ -188,6 +287,14 @@ class PolygonFixer:
         if self.first_start == True:
             self.first_start = False
             self.dlg = PolygonFixerDialog()
+            self.dlg.pushButton.clicked.connect(self.select_output_file)
+
+        # Fetch the currently loaded layers
+        layers = QgsProject.instance().layerTreeRoot().children()
+        # Clear the contents of the comboBox from previous runs
+        self.dlg.comboBox.clear()
+        # Populate the comboBox with names of all the loaded layers
+        self.dlg.comboBox.addItems([layer.name() for layer in layers])
 
         # show the dialog
         self.dlg.show()
@@ -195,6 +302,24 @@ class PolygonFixer:
         result = self.dlg.exec_()
         # See if OK was pressed
         if result:
-            # Do something useful here - delete the line containing pass and
-            # substitute with your code.
-            pass
+
+            selectedLayerIndex = self.dlg.comboBox.currentIndex()
+            selectedLayer = layers[selectedLayerIndex].layer()
+
+            if self.dlg.checkBox.isChecked():
+                buffered_layer = self.featurebuffer(selectedLayer)
+            else:
+                buffered_layer = selectedLayer
+
+            memory_layer = self.feature_difference(buffered_layer)
+
+            if self.dlg.lineEdit.text():
+                _writer = QgsVectorFileWriter.writeAsVectorFormat(memory_layer,str(self.dlg.lineEdit.text()),"utf-8",memory_layer.crs(),"ESRI Shapefile")
+            else:
+                QgsProject.instance().addMapLayer(memory_layer)
+
+            self.iface.messageBar().pushMessage(
+                selectedLayer.name() + " layer fixed successfully",
+                level=Qgis.Success, duration=3)
+
+
